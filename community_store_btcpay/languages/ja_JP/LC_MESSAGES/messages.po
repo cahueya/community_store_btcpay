@@ -1,0 +1,65 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2023-02-10T06:47:46+00:00\n"
+"PO-Revision-Date: 2023-02-10T06:47:46+00:00\n"
+"Language: ja_JP\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: controller.php:23
+msgid "BTC Payserver Payment Method for Community Store"
+msgstr ""
+
+#: controller.php:28
+msgid "BTC Payserver Payment Method"
+msgstr ""
+
+#: controller.php:36
+msgid "This package requires that Community Store be installed"
+msgstr ""
+
+#: elements/community_store_btcpay/checkout_form.php:5
+msgid "Click \"Complete Order\" to proceed to the BTCPayserver."
+msgstr ""
+
+#: elements/community_store_btcpay/dashboard_form.php:6
+msgid "Currency"
+msgstr "通貨"
+
+#: elements/community_store_btcpay/dashboard_form.php:10
+msgid "BTC Payserver URL"
+msgstr ""
+
+#: elements/community_store_btcpay/dashboard_form.php:14
+msgid "BTC Payserver ID"
+msgstr ""
+
+#: elements/community_store_btcpay/dashboard_form.php:19
+msgid "BTC Payserver API Key"
+msgstr ""
+
+#: elements/community_store_btcpay/dashboard_form.php:24
+msgid "BTC Payserver Webhook Secret"
+msgstr ""
+
+#: elements/community_store_btcpay/dashboard_form.php:29
+msgid "Transaction Description"
+msgstr ""
+
+#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:72
+msgid "BtcPay URL must be set"
+msgstr ""
+
+#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:75
+msgid "BtcPay Api Key must be set"
+msgstr ""
+
+#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:78
+msgid "BtcPay Store ID must be set"
+msgstr ""
