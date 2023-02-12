@@ -8,7 +8,6 @@ use Session;
 use Log;
 
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePaymentMethod;
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Cart\Cart as StoreCart;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer as StoreCustomer;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus as StoreOrderStatus;
