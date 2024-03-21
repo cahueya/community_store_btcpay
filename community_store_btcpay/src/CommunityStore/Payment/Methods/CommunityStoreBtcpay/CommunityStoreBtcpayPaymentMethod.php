@@ -8,6 +8,7 @@ use Session;
 use Log;
 
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePaymentMethod;
+use \Concrete\Package\CommunityStore\Src\CommunityStore\Cart\Cart as StoreCart;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer as StoreCustomer;
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus as StoreOrderStatus;
@@ -151,7 +152,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
         $secret = Config::get('community_store_btcpay.btcpayWebhooksecret');; // webhook secret configured in the BTCPay UI
 
         $raw_post_data = file_get_contents('php://input');
-
         $date = date('m/d/Y h:i:s a');
 
         if (false === $raw_post_data) {
@@ -165,7 +165,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             Log::addError($date . "Error. Could not decode the JSON payload from BTCPay.\n");
             throw new \Exception('Could not decode the JSON payload from BTCPay.');
         }
-
         // verify hmac256
         $headers = getallheaders();
         foreach ($headers as $key => $value) {
@@ -173,6 +172,8 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
                 $sig = $value;
             }
         }
+// needs testing
+//      $sig = $headers['BTCPay-Sig'];
 
         $webhookClient = new Webhook($host, $apiKey);
 
@@ -182,7 +183,10 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
                 'Invalid BTCPayServer payment notification message received - signature did not match.'
             );
         }
-
+    // needs testing
+    // if ($sig !== "sha256=" . hash_hmac('sha256', $raw_post_data, $secret)) {
+    // Log::addError($date . "Error. Invalid Signature detected! \n was: " . $sig . " should be: " . hash_hmac('sha256', $raw_post_data, $secret) . "\n");       //     throw new \Exception('Invalid BTCPayServer payment notification message received - signature did not match.');
+    //  }
         if (true === empty($payload->invoiceId)) {
             Log::addError($date . "Error. Invalid BTCPayServer payment notification message received - did not receive invoice ID.\n");
             throw new \Exception('Invalid BTCPayServer payment notification message received - did not receive invoice ID.');
@@ -222,6 +226,13 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             }
         }
 
+        if ($payload->type == "InvoiceProcessing") {
+            if ($order) {
+                $order->completeOrder($transReference);
+                $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle());
+                Log::addInfo("Payload received for BtcPay invoice " . $payload->invoiceId . " Type: " . $payload->type . " Price: " . $invoicePrice . " E-Mail: " . $buyerEmail . "\n");
+            }
+        }
         if ($payload->type == "InvoiceSettled") {
             if ($order) {
                 $order->completeOrder($transReference);
