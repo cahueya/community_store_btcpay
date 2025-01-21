@@ -23,9 +23,7 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
     public function dashboardForm()
     {
         $this->set('btcpayCurrency',Config::get('community_store_btcpay.btcpayCurrency'));
-        $this->set('btcpayMethod',Config::get('community_store_btcpay.btcpayMethod'));
         $this->set('btcpayId',Config::get('community_store_btcpay.btcpayId'));
-        $this->set('btcpayDiscount',Config::get('community_store_btcpay.btcpayDiscount'));
         $this->set('btcpayUrl',Config::get('community_store_btcpay.btcpayUrl'));
         $this->set('btcpayKey',Config::get('community_store_btcpay.btcpayKey'));
         $this->set('btcpayWebhooksecret',Config::get('community_store_btcpay.btcpayWebhooksecret'));
@@ -54,12 +52,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             'USD' => "U.S. Dollar"
         );
         $this->set('currencies',$currencies);
-        $paymethods = array(
-            'BTC' => "On-Chain Bitcoin",
-            'LND' => "Lightning",
-            'ALL' => "Bitcoin & Lightning"
-        );
-        $this->set('paymethods',$paymethods);
         $this->set('form',Core::make("helper/form"));
     }
 
@@ -70,8 +62,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
         Config::save('community_store_btcpay.btcpayKey',$data['btcpayKey']);
         Config::save('community_store_btcpay.btcpayWebhooksecret',$data['btcpayWebhooksecret']);
         Config::save('community_store_btcpay.btcpayCurrency',$data['btcpayCurrency']);
-        Config::save('community_store_btcpay.btcpayMethod',$data['btcpayMethod']);
-        Config::save('community_store_btcpay.btcpayDiscount',$data['btcpayDiscount']);
         Config::save('community_store_btcpay.btcpayTransactionDescription',$data['btcpayTransactionDescription']);
     }
 
@@ -102,70 +92,61 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
 
     public function redirectForm()
     {
-        $host     = Config::get('community_store_btcpay.btcpayUrl');
-        $order    = StoreOrder::getByID(Session::get('orderID'));
-        $total    = $order->getTotal();
-        $apiKey   = Config::get('community_store_btcpay.btcpayKey');
-        $storeId  = Config::get('community_store_btcpay.btcpayId');
+        $apiKey = Config::get('community_store_btcpay.btcpayKey');
+        $host = Config::get('community_store_btcpay.btcpayUrl');
+        $storeId = Config::get('community_store_btcpay.btcpayId');
+        $order = StoreOrder::getByID(Session::get('orderID'));
+        $amount = $order->getTotal();
         $siteName = Config::get('concrete.site');
 
         $currency = Config::get('community_store_btcpay.btcpayCurrency');
         if(!$currency){
             $currency = "USD";
         }
-        $paymentmethods = array();
-        $paymethod = Config::get('community_store_btcpay.btcpayMethod');
-        if($paymethod = 'BTC'){
-            unset($paymentmethods);
-            $paymentmethods[] = 'BTC';
-        }
-        if($paymethod = 'LND'){
-            unset($paymentmethods);
-            $paymentmethods[] = 'BTC-LightningNetwork';
-        }
-        if($paymethod = 'ALL'){
-            unset($paymentmethods);
-            $paymentmethods[] = 'BTC';
-            $paymentmethods[] = 'BTC-LightningNetwork';
-        }
-        $discount = Config::get('community_store_btcpay.btcpayDiscount');
-        if(!$discount){
-            $discount = 0;
-        }
-        $amount     = $total * ((100-$discount) / 100);
-        $orderId    = $order->getOrderID();
-        $customer   = new StoreCustomer();
+        $orderId = $order->getOrderID();
+        $customer = new StoreCustomer();
         $buyerEmail = $customer->getEmail();
+
+        $this->set('returnURL', URL::to('/checkout/complete'));
+        $this->set('cancelReturn', URL::to('/checkout'));
 
         try {
             $client = new Invoice($host, $apiKey);
+        
             $checkoutOptions = new InvoiceCheckoutOptions();
             $checkoutOptions
                 ->setSpeedPolicy($checkoutOptions::SPEED_HIGH)
-                ->setPaymentMethods($paymentmethods)
+                //->setPaymentMethods(['BTC-LN'])
                 ->setRedirectURL(URL::to('/checkout/complete'));
-            
-            $response = $client->createInvoice(
+        
+            // Create the invoice
+            $invoiceResponse = $client->createInvoice(
                 $storeId,
                 $currency,
                 PreciseNumber::parseString($amount),
                 $orderId,
                 $buyerEmail,
-                $metaData,
+                $metaData ?? [],
                 $checkoutOptions
             );
-            $invoiceID = $response['id'];
-            $url = $host . '/i/' . $invoiceID;
-
-            $order->saveTransactionReference($invoiceID);
-            $this->set('returnURL',URL::to('/checkout/complete'));
-            $this->set('cancelReturn',URL::to('/checkout'));
-            $this->set('host',$host);
-            $this->set('InvoiceId',$invoiceID);
-
+        
+            // Extract the Invoice ID
+            $invoiceId = $invoiceResponse['id'] ?? null;
+        
+            if ($invoiceId) {
+                $this->set('host', $host);
+                $this->set('InvoiceId', $invoiceId); // Pass the Invoice ID to the view
+            } else {
+                Log::addError('Failed to retrieve Invoice ID from the response');
+                throw new \Exception('Invoice ID is missing from the response.');
+            }
         } catch (\Throwable $e) {
-            echo "Error: " . $e->getMessage();
+            Log::addError('Exception caught in redirectForm: ' . $e->getMessage());
+            Log::addError('Stack trace: ' . $e->getTraceAsString());
+            echo "An error occurred. Please check the logs.";
         }
+        
+        
     }
 
     public function getAction()
@@ -182,6 +163,7 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
         $secret  = Config::get('community_store_btcpay.btcpayWebhooksecret');; // webhook secret configured in the BTCPay UI
 
         $raw_post_data = file_get_contents('php://input');
+
         $date = date('m/d/Y h:i:s a');
 
         if (false === $raw_post_data) {
@@ -195,6 +177,7 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             Log::addError($date . "Error. Could not decode the JSON payload from BTCPay.\n");
             throw new \Exception('Could not decode the JSON payload from BTCPay.');
         }
+
         // verify hmac256
         $headers = getallheaders();
         foreach ($headers as $key => $value) {
@@ -202,7 +185,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
                 $sig = $value;
             }
         }
-//      $sig = $headers['BTCPay-Sig'];
 
         $webhookClient = new Webhook($host, $apiKey);
 
@@ -213,10 +195,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             );
         }
 
-       // if ($sig !== "sha256=" . hash_hmac('sha256', $raw_post_data, $secret)) {
-       //     Log::addError($date . "Error. Invalid Signature detected! \n was: " . $sig . " should be: " . hash_hmac('sha256', $raw_post_data, $secret) . "\n");
-       //     throw new \Exception('Invalid BTCPayServer payment notification message received - signature did not match.');
-       // }
         if (true === empty($payload->invoiceId)) {
             Log::addError($date . "Error. Invalid BTCPayServer payment notification message received - did not receive invoice ID.\n");
             throw new \Exception('Invalid BTCPayServer payment notification message received - did not receive invoice ID.');
@@ -256,13 +234,6 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
             }
         }
 
-        if ($payload->type == "InvoiceProcessing") {
-            if ($order) {
-                $order->completeOrder($transReference);
-                $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle());
-                Log::addInfo("Payload received for BtcPay invoice " . $payload->invoiceId . " Type: " . $payload->type . " Price: " . $invoicePrice . " E-Mail: " . $buyerEmail . "\n");
-            }
-        }
         if ($payload->type == "InvoiceSettled") {
             if ($order) {
                 $order->completeOrder($transReference);
