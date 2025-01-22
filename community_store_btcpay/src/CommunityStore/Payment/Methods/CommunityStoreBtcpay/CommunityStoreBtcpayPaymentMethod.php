@@ -132,7 +132,8 @@ class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
         
             // Extract the Invoice ID
             $invoiceId = $invoiceResponse['id'] ?? null;
-        
+            $order->saveTransactionReference($invoiceId);
+
             if ($invoiceId) {
                 $this->set('host', $host);
                 $this->set('InvoiceId', $invoiceId); // Pass the Invoice ID to the view
