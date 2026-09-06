@@ -1,33 +1,47 @@
-<?php 
-defined('C5_EXECUTE') or die(_("Access Denied."));
+<?php
+
+defined('C5_EXECUTE') or die('Access Denied.');
 extract($vars);
 ?>
-<div class="form-group">
-    <?= $form->label('btcpayCurrency',t("Currency")); ?>
-    <?= $form->select('btcpayCurrency',$currencies,$btcpayCurrency?$btcpayCurrency:'USD');?>
+
+<div class="alert alert-info">
+    <?= t('Payments use the Community Store currency: %s. Currency conversion is not performed by this payment method.', '<strong>' . h($storeCurrency) . '</strong>') ?>
 </div>
 
 <div class="form-group">
-    <label><?= t("BTC Payserver URL")?></label>
-    <input type="url" name="btcpayUrl" value="<?= $btcpayUrl?>" class="form-control">
-</div>
-<div class="form-group">
-    <label><?= t("BTC Payserver ID")?></label>
-    <input type="text" name="btcpayId" value="<?= $btcpayId?>" class="form-control">
+    <?= $form->label('btcpayUrl', t('BTCPay Server URL')) ?>
+    <?= $form->url('btcpayUrl', $btcpayUrl, ['placeholder' => 'https://btcpay.example.com']) ?>
 </div>
 
 <div class="form-group">
-    <label><?= t("BTC Payserver API Key")?></label>
-    <input type="text" name="btcpayKey" value="<?= $btcpayKey?>" class="form-control">
+    <?= $form->label('btcpayId', t('BTCPay Server Store ID')) ?>
+    <?= $form->text('btcpayId', $btcpayId) ?>
 </div>
 
 <div class="form-group">
-    <label><?= t("BTC Payserver Webhook Secret")?></label>
-    <input type="text" name="btcpayWebhooksecret" value="<?= $btcpayWebhooksecret?>" class="form-control">
+    <?= $form->label('btcpayKey', t('BTCPay Server API key')) ?>
+    <?= $form->password('btcpayKey', '', ['autocomplete' => 'new-password']) ?>
+    <div class="form-text">
+        <?= $btcpayKeyConfigured
+            ? t('An API key is already configured. Leave this field blank to keep it unchanged.')
+            : t('Enter an API key that can create and view invoices for this BTCPay Server store.') ?>
+    </div>
 </div>
 
 <div class="form-group">
-    <label><?= t("Transaction Description")?></label>
-    <?= $form->select('btcpayTransactionDescription',array('order'=>'Show as: "Order from ' . Config::get('concrete.site') .'"' ,'products'=>'List of products and quantities'),$btcpayTransactionDescription);?>
+    <?= $form->label('btcpayWebhooksecret', t('BTCPay Server webhook secret')) ?>
+    <?= $form->password('btcpayWebhooksecret', '', ['autocomplete' => 'new-password']) ?>
+    <div class="form-text">
+        <?= $btcpayWebhookSecretConfigured
+            ? t('A webhook secret is already configured. Leave this field blank to keep it unchanged.')
+            : t('Create a webhook in BTCPay Server and enter its secret here.') ?>
+    </div>
 </div>
 
+<div class="form-group">
+    <label class="form-label"><?= t('Webhook URL') ?></label>
+    <input type="text" class="form-control font-monospace" value="<?= h($webhookUrl) ?>" readonly>
+    <div class="form-text">
+        <?= t('Configure this URL in BTCPay Server for the InvoiceSettled, InvoiceExpired and InvoiceInvalid events.') ?>
+    </div>
+</div>

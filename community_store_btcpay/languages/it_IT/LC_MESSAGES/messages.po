@@ -1,65 +1,77 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
-"Report-Msgid-Bugs-To: \n"
-"Last-Translator: \n"
-"Language-Team: \n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2023-02-10T06:47:46+00:00\n"
-"PO-Revision-Date: 2023-02-10T06:47:46+00:00\n"
-"Language: it_IT\n"
-"Plural-Forms: nplurals=3; plural=(n == 1) ? 0 : ((n != 0 && n % 1000000 == 0) ? 1 : 2);\n"
+"Project-Id-Version: Community Store BTCPay 1.3.0\\n"
+"POT-Creation-Date: 2026-09-05 00:00+0000\\n"
+"PO-Revision-Date: 2026-09-05 00:00+0000\\n"
+"MIME-Version: 1.0\\n"
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Content-Transfer-Encoding: 8bit\\n"
+"Language: it_IT\\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\\n"
 
-#: controller.php:23
-msgid "BTC Payserver Payment Method for Community Store"
-msgstr ""
+msgid "BTCPay Server payment method for Community Store."
+msgstr "Metodo di pagamento BTCPay Server per Community Store."
 
-#: controller.php:28
-msgid "BTC Payserver Payment Method"
-msgstr ""
+msgid "BTCPay Server Payment Method"
+msgstr "Metodo di pagamento BTCPay Server"
 
-#: controller.php:36
-msgid "This package requires that Community Store be installed"
-msgstr ""
+msgid "Not configured"
+msgstr "Non configurato"
 
-#: elements/community_store_btcpay/checkout_form.php:5
-msgid "Click \"Complete Order\" to proceed to the BTCPayserver."
-msgstr ""
+msgid "BTCPay Server URL must be set."
+msgstr "L’URL di BTCPay Server deve essere specificato."
 
-#: elements/community_store_btcpay/dashboard_form.php:6
-msgid "Currency"
-msgstr "Valuta"
+msgid "BTCPay Server URL must be a valid URL."
+msgstr "L’URL di BTCPay Server deve essere un URL valido."
 
-#: elements/community_store_btcpay/dashboard_form.php:10
-msgid "BTC Payserver URL"
-msgstr ""
+msgid "BTCPay Server Store ID must be set."
+msgstr "L’ID dello store BTCPay Server deve essere specificato."
 
-#: elements/community_store_btcpay/dashboard_form.php:14
-msgid "BTC Payserver ID"
-msgstr ""
+msgid "BTCPay Server API key must be set."
+msgstr "La chiave API di BTCPay Server deve essere specificata."
 
-#: elements/community_store_btcpay/dashboard_form.php:19
-msgid "BTC Payserver API Key"
-msgstr ""
+msgid "BTCPay Server webhook secret must be set."
+msgstr "Il segreto webhook di BTCPay Server deve essere specificato."
 
-#: elements/community_store_btcpay/dashboard_form.php:24
-msgid "BTC Payserver Webhook Secret"
-msgstr ""
+msgid "Community Store currency must be configured before enabling BTCPay Server."
+msgstr "La valuta di Community Store deve essere configurata prima di abilitare BTCPay Server."
 
-#: elements/community_store_btcpay/dashboard_form.php:29
-msgid "Transaction Description"
-msgstr ""
+msgid "Unable to start the BTCPay Server payment. Please return to checkout and try again."
+msgstr "Impossibile avviare il pagamento BTCPay Server. Torna al checkout e riprova."
 
-#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:72
-msgid "BtcPay URL must be set"
-msgstr ""
+#, php-format
+msgid "Payments use the Community Store currency: %s. Currency conversion is not performed by this payment method."
+msgstr "I pagamenti utilizzano la valuta configurata in Community Store: %s. Questo metodo di pagamento non esegue conversioni di valuta."
 
-#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:75
-msgid "BtcPay Api Key must be set"
-msgstr ""
+msgid "BTCPay Server URL"
+msgstr "URL di BTCPay Server"
 
-#: src/CommunityStore/Payment/Methods/CommunityStoreBtcpay/CommunityStoreBtcpayPaymentMethod.php:78
-msgid "BtcPay Store ID must be set"
-msgstr ""
+msgid "BTCPay Server Store ID"
+msgstr "ID dello store BTCPay Server"
+
+msgid "BTCPay Server API key"
+msgstr "Chiave API di BTCPay Server"
+
+msgid "An API key is already configured. Leave this field blank to keep it unchanged."
+msgstr "È già configurata una chiave API. Lascia vuoto questo campo per mantenerla invariata."
+
+msgid "Enter an API key that can create and view invoices for this BTCPay Server store."
+msgstr "Inserisci una chiave API autorizzata a creare e visualizzare le fatture per questo store BTCPay Server."
+
+msgid "BTCPay Server webhook secret"
+msgstr "Segreto webhook di BTCPay Server"
+
+msgid "A webhook secret is already configured. Leave this field blank to keep it unchanged."
+msgstr "È già configurato un segreto webhook. Lascia vuoto questo campo per mantenerlo invariato."
+
+msgid "Create a webhook in BTCPay Server and enter its secret here."
+msgstr "Crea un webhook in BTCPay Server e inserisci qui il relativo segreto."
+
+msgid "Webhook URL"
+msgstr "URL del webhook"
+
+msgid "Configure this URL in BTCPay Server for the InvoiceSettled, InvoiceExpired and InvoiceInvalid events."
+msgstr "Configura questo URL in BTCPay Server per gli eventi InvoiceSettled, InvoiceExpired e InvoiceInvalid."
+
+msgid "Click \"Complete Order\" to proceed to BTCPay Server."
+msgstr "Fai clic su «Completa ordine» per procedere a BTCPay Server."

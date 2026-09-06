@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "90e43b0bb0407eb04b67527096d5268b",
+    "content-hash": "1457a0b810e61f9bc33f507dc7a66340",
     "packages": [
         {
             "name": "btcpayserver/btcpayserver-greenfield-php",
-            "version": "v1.3.2",
+            "version": "v2.9.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/btcpayserver/btcpayserver-greenfield-php.git",
-                "reference": "563c1b94fb432d16719aad985c141d7e8ce13fbd"
+                "reference": "a3004b382bebd13b391a16901a4bd4926e1975b9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/btcpayserver/btcpayserver-greenfield-php/zipball/563c1b94fb432d16719aad985c141d7e8ce13fbd",
-                "reference": "563c1b94fb432d16719aad985c141d7e8ce13fbd",
+                "url": "https://api.github.com/repos/btcpayserver/btcpayserver-greenfield-php/zipball/a3004b382bebd13b391a16901a4bd4926e1975b9",
+                "reference": "a3004b382bebd13b391a16901a4bd4926e1975b9",
                 "shasum": ""
             },
             "require": {
@@ -25,12 +25,13 @@
                 "ext-curl": "*",
                 "ext-json": "*",
                 "ext-mbstring": "*",
-                "php": ">=7.3.0"
+                "php": ">=8.0"
             },
             "require-dev": {
                 "friendsofphp/php-cs-fixer": "^3.0",
                 "phpunit/phpunit": "^9.5",
-                "vimeo/psalm": "^4.8"
+                "vimeo/psalm": "^4.8",
+                "vlucas/phpdotenv": "^5.5"
             },
             "type": "library",
             "autoload": {
@@ -53,7 +54,7 @@
                 }
             ],
             "description": "BTCPay Server Greenfield API PHP client library.",
-            "time": "2022-03-16T21:27:27+00:00"
+            "time": "2026-04-30T09:29:00+00:00"
         }
     ],
     "packages-dev": [],
@@ -62,7 +63,9 @@
     "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
+    "platform": {
+        "php": ">=8.1"
+    },
     "platform-dev": [],
-    "plugin-api-version": "1.1.0"
+    "plugin-api-version": "2.6.0"
 }

@@ -3,56 +3,74 @@
 namespace Concrete\Package\CommunityStoreBtcpay;
 
 use Concrete\Core\Package\Package;
-use Concrete\Core\Support\Facade\Route;
-use Whoops\Exception\ErrorException;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as PaymentMethod;
+use Concrete\Package\CommunityStoreBtcpay\Src\CommunityStore\RouteList;
 
 class Controller extends Package
 {
     protected $pkgHandle = 'community_store_btcpay';
-    protected $appVersionRequired = '8.0';
-    protected $pkgVersion = '1.2';
-    protected $packageDependencies = ['community_store'=>'2.0'];
+    protected $appVersionRequired = '9.0.0';
+    protected $pkgVersion = '1.3.0';
+    protected $packageDependencies = [
+        'community_store' => '2.6.0',
+    ];
 
     protected $pkgAutoloaderRegistries = [
-        'src/CommunityStore' => '\Concrete\Package\CommunityStoreBtcpay\Src\CommunityStore',
+        'src/CommunityStore' => 'Concrete\\Package\\CommunityStoreBtcpay\\Src\\CommunityStore',
     ];
 
     public function getPackageDescription()
     {
-        return t("BTC Payserver Payment Method for Community Store");
+        return t('BTCPay Server payment method for Community Store.');
     }
 
     public function getPackageName()
     {
-        return t("BTC Payserver Payment Method");
+        return t('BTCPay Server Payment Method');
     }
 
     public function install()
     {
-        $installed = $this->app->make('Concrete\Core\Package\PackageService')->getInstalledHandles();
-
-        if(!(is_array($installed) && in_array('community_store',$installed)) ) {
-            throw new ErrorException(t('This package requires that Community Store be installed'));
-        } else {
-            $pkg = parent::install();
-            $pm = new PaymentMethod();
-            $pm->add('community_store_btcpay','BTC Payserver',$pkg);
-        }
-
+        $pkg = parent::install();
+        PaymentMethod::add('community_store_btcpay', 'BTCPay Server', $pkg);
     }
+
+    public function upgrade()
+    {
+        parent::upgrade();
+
+        $method = PaymentMethod::getByHandle('community_store_btcpay');
+        if ($method) {
+            $displayName = $method->getDisplayName();
+            $method->setName('BTCPay Server');
+
+            // Preserve a custom display name, but modernize the legacy default.
+            if ($displayName === 'BTC Payserver' || $displayName === '') {
+                $method->setDisplayName('BTCPay Server');
+            }
+
+            $method->save();
+        }
+    }
+
     public function uninstall()
     {
-        $pm = PaymentMethod::getByHandle('community_store_btcpay');
-        if ($pm) {
-            $pm->delete();
+        $method = PaymentMethod::getByHandle('community_store_btcpay');
+        if ($method) {
+            $method->delete();
         }
-        $pkg = parent::uninstall();
+
+        parent::uninstall();
     }
 
-    public function on_start() {
-        require $this->getPackagePath() . '/vendor/autoload.php';
-        Route::register('/checkout/btcpayresponse','\Concrete\Package\CommunityStoreBtcpay\Src\CommunityStore\Payment\Methods\CommunityStoreBtcpay\CommunityStoreBtcpayPaymentMethod::validateCompletion');
+    public function on_start()
+    {
+        $autoload = $this->getPackagePath() . '/vendor/autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+
+        $router = $this->app->make('router');
+        (new RouteList())->loadRoutes($router);
     }
 }
-?>

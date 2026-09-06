@@ -1,24 +1,28 @@
-<?php defined('C5_EXECUTE') or die(_("Access Denied."));
+<?php
+
+defined('C5_EXECUTE') or die('Access Denied.');
 extract($vars);
 ?>
 
-<script src ="<?= $host; ?>/modal/btcpay.js"></script>
-<script type="text/javascript">
-
+<?php if (!empty($error)): ?>
+    <div class="alert alert-danger"><?= h($error) ?></div>
+<?php else: ?>
+    <script src="<?= h($host) ?>/modal/btcpay.js"></script>
+    <script>
     $(function () {
-        $("#store-checkout-redirect-form").submit(function(e){
-            e.preventDefault();
+        var form = $('#store-checkout-redirect-form');
+        var invoiceId = <?= json_encode((string) $invoiceId, JSON_UNESCAPED_SLASHES) ?>;
+        var cancelReturn = <?= json_encode((string) $cancelReturn, JSON_UNESCAPED_SLASHES) ?>;
+
+        form.on('submit', function (event) {
+            event.preventDefault();
         });
-        $("#store-checkout-redirect-form .btn").remove();
-        var InvoiceId = '<?= $InvoiceId; ?>';
-        var returnURL = '<?= $returnURL; ?>';
-        var cancelReturn = '<?= $cancelReturn; ?>';
-        window.btcpay.showInvoice(InvoiceId);
+        form.find('.btn').remove();
 
-        window.btcpay.onModalWillLeave(() => {
-        // enable the pay button again
-        window.location.href = cancelReturn;
-        })
+        window.btcpay.showInvoice(invoiceId);
+        window.btcpay.onModalWillLeave(function () {
+            window.location.href = cancelReturn;
+        });
     });
-
-</script>
+    </script>
+<?php endif; ?>

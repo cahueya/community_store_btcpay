@@ -1,267 +1,371 @@
 <?php
+
 namespace Concrete\Package\CommunityStoreBtcpay\Src\CommunityStore\Payment\Methods\CommunityStoreBtcpay;
 
-use Core;
-use URL;
-use Config;
-use Session;
-use Log;
-
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePaymentMethod;
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Cart\Cart as StoreCart;
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer as StoreCustomer;
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus as StoreOrderStatus;
-use \Concrete\Core\Multilingual\Page\Section\Section;
-use \BTCPayServer\Client\Invoice as Invoice;
-use \BTCPayServer\Client\Webhook as Webhook;
-use \BTCPayServer\Client\InvoiceCheckoutOptions as InvoiceCheckoutOptions;
-use \BTCPayServer\Util\PreciseNumber as PreciseNumber;
+use BTCPayServer\Client\Invoice;
+use BTCPayServer\Client\InvoiceCheckoutOptions;
+use BTCPayServer\Client\Webhook;
+use BTCPayServer\Result\Invoice as InvoiceResult;
+use BTCPayServer\Util\PreciseNumber;
+use Concrete\Core\Support\Facade\Application;
+use Concrete\Core\Support\Facade\Config;
+use Concrete\Core\Support\Facade\DatabaseORM;
+use Concrete\Core\Support\Facade\Log;
+use Concrete\Core\Support\Facade\Session;
+use Concrete\Core\Support\Facade\Url;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer as StoreCustomer;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderStatus\OrderStatus as StoreOrderStatus;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePaymentMethod;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class CommunityStoreBtcpayPaymentMethod extends StorePaymentMethod
 {
+    private const WEBHOOK_EVENTS = [
+        'InvoiceSettled',
+        'InvoiceExpired',
+        'InvoiceInvalid',
+    ];
+
     public function dashboardForm()
     {
-        $this->set('btcpayCurrency',Config::get('community_store_btcpay.btcpayCurrency'));
-        $this->set('btcpayId',Config::get('community_store_btcpay.btcpayId'));
-        $this->set('btcpayUrl',Config::get('community_store_btcpay.btcpayUrl'));
-        $this->set('btcpayKey',Config::get('community_store_btcpay.btcpayKey'));
-        $this->set('btcpayWebhooksecret',Config::get('community_store_btcpay.btcpayWebhooksecret'));
-        $this->set('btcpayTransactionDescription',Config::get('community_store_btcpay.btcpayTransactionDescription'));
-        $currencies = array(
-            'AUD' => "Australian Dollar",
-            'CAD' => "Canadian Dollar",
-            'CZK' => "Czech Koruna",
-            'DKK' => "Danish Krone",
-            'EUR' => "Euro",
-            'HKD' => "Hong Kong Dollar",
-            'HUF' => "Hungarian Forint",
-            'ILS' => "Israeli New Sheqel",
-            'JPY' => "Japanese Yen",
-            'MXN' => "Mexican Peso",
-            'NOK' => "Norwegian Krone",
-            'NZD' => "New Zealand Dollar",
-            'PHP' => "Philippine Peso",
-            'PLN' => "Polish Zloty",
-            'GBP' => "Pound Sterling",
-            'SGD' => "Singapore Dollar",
-            'SEK' => "Swedish Krona",
-            'CHF' => "Swiss Franc",
-            'TWD' => "Taiwan New Dollar",
-            'THB' => "Thai Baht",
-            'USD' => "U.S. Dollar"
-        );
-        $this->set('currencies',$currencies);
-        $this->set('form',Core::make("helper/form"));
+        $apiKey = trim((string) Config::get('community_store_btcpay.btcpayKey'));
+        $webhookSecret = trim((string) Config::get('community_store_btcpay.btcpayWebhooksecret'));
+
+        $this->set('btcpayId', (string) Config::get('community_store_btcpay.btcpayId'));
+        $this->set('btcpayUrl', (string) Config::get('community_store_btcpay.btcpayUrl'));
+        $this->set('btcpayKeyConfigured', $apiKey !== '');
+        $this->set('btcpayWebhookSecretConfigured', $webhookSecret !== '');
+        $this->set('storeCurrency', self::getStoreCurrency() ?: t('Not configured'));
+        $this->set('webhookUrl', (string) Url::to('/checkout/btcpayresponse'));
+        $this->set('form', Application::getFacadeApplication()->make('helper/form'));
     }
 
     public function save(array $data = [])
     {
-        Config::save('community_store_btcpay.btcpayUrl',$data['btcpayUrl']);
-        Config::save('community_store_btcpay.btcpayId',$data['btcpayId']);
-        Config::save('community_store_btcpay.btcpayKey',$data['btcpayKey']);
-        Config::save('community_store_btcpay.btcpayWebhooksecret',$data['btcpayWebhooksecret']);
-        Config::save('community_store_btcpay.btcpayCurrency',$data['btcpayCurrency']);
-        Config::save('community_store_btcpay.btcpayTransactionDescription',$data['btcpayTransactionDescription']);
+        $host = rtrim(trim((string) ($data['btcpayUrl'] ?? '')), '/');
+        $storeId = trim((string) ($data['btcpayId'] ?? ''));
+        $apiKey = trim((string) ($data['btcpayKey'] ?? ''));
+        $webhookSecret = trim((string) ($data['btcpayWebhooksecret'] ?? ''));
+
+        Config::save('community_store_btcpay.btcpayUrl', $host);
+        Config::save('community_store_btcpay.btcpayId', $storeId);
+
+        if ($apiKey !== '') {
+            Config::save('community_store_btcpay.btcpayKey', $apiKey);
+        }
+        if ($webhookSecret !== '') {
+            Config::save('community_store_btcpay.btcpayWebhooksecret', $webhookSecret);
+        }
     }
 
-    public function validate($args,$e)
+    public function validate($args, $e)
     {
-        $pm = StorePaymentMethod::getByHandle('community_store_btcpay');
-        if($args['paymentMethodEnabled'][$pm->getID()]==1){
-            if($args['btcpayUrl']==""){
-                $e->add(t("BtcPay URL must be set"));
-            }
-            if($args['btcpayKey']==""){
-                $e->add(t("BtcPay Api Key must be set"));
-            }
-            if($args['btcpayId']==""){
-                $e->add(t("BtcPay Store ID must be set"));
-            }
+        $method = StorePaymentMethod::getByHandle('community_store_btcpay');
+        $enabled = $method
+            && !empty($args['paymentMethodEnabled'][$method->getID()]);
+
+        if (!$enabled) {
+            return $e;
         }
+
+        $host = rtrim(trim((string) ($args['btcpayUrl'] ?? '')), '/');
+        $storeId = trim((string) ($args['btcpayId'] ?? ''));
+        $submittedApiKey = trim((string) ($args['btcpayKey'] ?? ''));
+        $submittedWebhookSecret = trim((string) ($args['btcpayWebhooksecret'] ?? ''));
+        $savedApiKey = trim((string) Config::get('community_store_btcpay.btcpayKey'));
+        $savedWebhookSecret = trim((string) Config::get('community_store_btcpay.btcpayWebhooksecret'));
+
+        if ($host === '') {
+            $e->add(t('BTCPay Server URL must be set.'));
+        } elseif (filter_var($host, FILTER_VALIDATE_URL) === false) {
+            $e->add(t('BTCPay Server URL must be a valid URL.'));
+        }
+        if ($storeId === '') {
+            $e->add(t('BTCPay Server Store ID must be set.'));
+        }
+        if ($submittedApiKey === '' && $savedApiKey === '') {
+            $e->add(t('BTCPay Server API key must be set.'));
+        }
+        if ($submittedWebhookSecret === '' && $savedWebhookSecret === '') {
+            $e->add(t('BTCPay Server webhook secret must be set.'));
+        }
+        if (self::getStoreCurrency() === '') {
+            $e->add(t('Community Store currency must be configured before enabling BTCPay Server.'));
+        }
+
         return $e;
     }
 
     public function submitPayment()
     {
-
-        //nothing to do except return true
-        return array('error'=>0, 'transactionReference'=>'');
-
+        return ['error' => 0, 'transactionReference' => ''];
     }
 
     public function redirectForm()
     {
-        $apiKey = Config::get('community_store_btcpay.btcpayKey');
-        $host = Config::get('community_store_btcpay.btcpayUrl');
-        $storeId = Config::get('community_store_btcpay.btcpayId');
-        $order = StoreOrder::getByID(Session::get('orderID'));
-        $amount = $order->getTotal();
-        $siteName = Config::get('concrete.site');
-
-        $currency = Config::get('community_store_btcpay.btcpayCurrency');
-        if(!$currency){
-            $currency = "USD";
-        }
-        $orderId = $order->getOrderID();
-        $customer = new StoreCustomer();
-        $buyerEmail = $customer->getEmail();
-
-        $this->set('returnURL', URL::to('/checkout/complete'));
-        $this->set('cancelReturn', URL::to('/checkout'));
+        $this->set('cancelReturn', (string) Url::to('/checkout'));
 
         try {
-            $client = new Invoice($host, $apiKey);
-        
-            $checkoutOptions = new InvoiceCheckoutOptions();
-            $checkoutOptions
-                ->setSpeedPolicy($checkoutOptions::SPEED_HIGH)
-                //->setPaymentMethods(['BTC-LN'])
-                ->setRedirectURL(URL::to('/checkout/complete'));
-        
-            // Create the invoice
-            $invoiceResponse = $client->createInvoice(
-                $storeId,
-                $currency,
-                PreciseNumber::parseString($amount),
-                $orderId,
-                $buyerEmail,
-                $metaData ?? [],
-                $checkoutOptions
-            );
-        
-            // Extract the Invoice ID
-            $invoiceId = $invoiceResponse['id'] ?? null;
-            $order->saveTransactionReference($invoiceId);
+            self::assertSdkAvailable();
 
-            if ($invoiceId) {
-                $this->set('host', $host);
-                $this->set('InvoiceId', $invoiceId); // Pass the Invoice ID to the view
-            } else {
-                Log::addError('Failed to retrieve Invoice ID from the response');
-                throw new \Exception('Invoice ID is missing from the response.');
+            $host = self::getHost();
+            $apiKey = self::getApiKey();
+            $storeId = self::getStoreId();
+            $currency = self::getStoreCurrency();
+            $order = StoreOrder::getByID((int) Session::get('orderID'));
+
+            if (!$order) {
+                throw new \RuntimeException('Community Store order could not be loaded.');
             }
-        } catch (\Throwable $e) {
-            Log::addError('Exception caught in redirectForm: ' . $e->getMessage());
-            Log::addError('Stack trace: ' . $e->getTraceAsString());
-            echo "An error occurred. Please check the logs.";
+            if ($order->getCancelled()) {
+                throw new \RuntimeException('The Community Store order has already been cancelled.');
+            }
+            if ($host === '' || $apiKey === '' || $storeId === '' || $currency === '') {
+                throw new \RuntimeException('BTCPay Server payment method is not fully configured.');
+            }
+
+            $client = new Invoice($host, $apiKey);
+            $invoice = $this->getReusableInvoice($client, $storeId, $order, $currency);
+
+            if (!$invoice) {
+                $checkoutOptions = (new InvoiceCheckoutOptions())
+                    ->setSpeedPolicy(InvoiceCheckoutOptions::SPEED_HIGH)
+                    ->setRedirectURL((string) Url::to('/checkout/complete'));
+
+                $customer = new StoreCustomer();
+                $invoice = $client->createInvoice(
+                    $storeId,
+                    $currency,
+                    PreciseNumber::parseString((string) $order->getTotal()),
+                    (string) $order->getOrderID(),
+                    (string) $customer->getEmail(),
+                    null,
+                    $checkoutOptions
+                );
+
+                $order->saveTransactionReference($invoice->getId());
+            }
+
+            $this->set('host', $host);
+            $this->set('invoiceId', $invoice->getId());
+        } catch (\Throwable $exception) {
+            Log::addError('BTCPay Server redirect failed: ' . $exception->getMessage());
+            $this->set('error', t('Unable to start the BTCPay Server payment. Please return to checkout and try again.'));
         }
-        
-        
     }
 
-    public function getAction()
+    private function getReusableInvoice(Invoice $client, string $storeId, StoreOrder $order, string $currency): ?InvoiceResult
     {
-       return false;
+        $invoiceId = trim((string) $order->getTransactionReference());
+        if ($invoiceId === '') {
+            return null;
+        }
+
+        $invoice = $client->getInvoice($storeId, $invoiceId);
+
+        if (!self::invoiceMatchesOrder($invoice, $order, $currency)) {
+            throw new \RuntimeException('Existing BTCPay Server invoice does not match the Community Store order.');
+        }
+
+        if ($invoice->isExpired() || $invoice->isInvalid() || $invoice->isPaidLate()) {
+            self::cancelOrder($order, 'BTCPay Server invoice is no longer payable.');
+            throw new \RuntimeException('Existing BTCPay Server invoice is expired or invalid.');
+        }
+
+        if (!$invoice->isNew() && !$invoice->isProcessing() && !$invoice->isSettled()) {
+            throw new \RuntimeException('Existing BTCPay Server invoice has an unsupported state.');
+        }
+
+        return $invoice;
     }
 
     public static function validateCompletion()
     {
-        // Fill in with your BTCPay Server data.
-        $apiKey  = Config::get('community_store_btcpay.btcpayKey');;
-        $host    = Config::get('community_store_btcpay.btcpayUrl');; // e.g. https://your.btcpay-server.tld
-        $storeId = Config::get('community_store_btcpay.btcpayId');;
-        $secret  = Config::get('community_store_btcpay.btcpayWebhooksecret');; // webhook secret configured in the BTCPay UI
+        $request = Request::createFromGlobals();
+        $rawBody = $request->getContent();
+        $signature = (string) $request->headers->get('BTCPay-Sig', '');
+        $secret = self::getWebhookSecret();
 
-        $raw_post_data = file_get_contents('php://input');
-
-        $date = date('m/d/Y h:i:s a');
-
-        if (false === $raw_post_data) {
-            Log::addError("Error. Could not read from the php://input stream or invalid BTCPayServer payload received.\n");
-            throw new \Exception('Could not read from the php://input stream or invalid BTCPayServer payload received.');
+        if ($rawBody === '' || $secret === '') {
+            Log::addError('BTCPay Server webhook could not be processed because the request body or webhook secret is missing.');
+            return new Response('', 400);
         }
 
-        $payload = json_decode($raw_post_data, false, 512, JSON_THROW_ON_ERROR);
-
-        if (true === empty($payload)) {
-            Log::addError($date . "Error. Could not decode the JSON payload from BTCPay.\n");
-            throw new \Exception('Could not decode the JSON payload from BTCPay.');
+        self::loadSdkAutoloaderIfNeeded();
+        if (!class_exists(Webhook::class)) {
+            Log::addError('BTCPay Server webhook could not be processed because the Greenfield PHP library is not installed.');
+            return new Response('', 500);
         }
 
-        // verify hmac256
-        $headers = getallheaders();
-        foreach ($headers as $key => $value) {
-            if (strtolower($key) === 'btcpay-sig') {
-                $sig = $value;
-            }
-        }
-
-        $webhookClient = new Webhook($host, $apiKey);
-
-        if (!$webhookClient->isIncomingWebhookRequestValid($raw_post_data, $sig, $secret)) {
-            Log::addError($date . "Error. Invalid Signature detected! \n was: " . $sig . " should be: " . hash_hmac('sha256', $raw_post_data, $secret) . "\n");
-            throw new \RuntimeException(
-                'Invalid BTCPayServer payment notification message received - signature did not match.'
-            );
-        }
-
-        if (true === empty($payload->invoiceId)) {
-            Log::addError($date . "Error. Invalid BTCPayServer payment notification message received - did not receive invoice ID.\n");
-            throw new \Exception('Invalid BTCPayServer payment notification message received - did not receive invoice ID.');
+        if (!Webhook::isIncomingWebhookRequestValid($rawBody, $signature, $secret)) {
+            Log::addWarning('BTCPay Server webhook signature validation failed.');
+            return new Response('', 401);
         }
 
         try {
-            $client = new Invoice($host, $apiKey);
-            $invoice = $client->getInvoice($storeId, $payload->invoiceId);
-        } catch (\Throwable $e) {
-            Log::addError("Error: " . $e->getMessage());
-            throw $e;
+            $payload = json_decode($rawBody, false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            Log::addWarning('BTCPay Server webhook contained invalid JSON.');
+            return new Response('', 400);
         }
 
-        $invoicePrice = $invoice->getData()['amount'];
-        $buyerEmail = $invoice->getData()['metadata']['buyerEmail'];
-        $transReference = $payload->invoiceId;
-        $em = \ORM::entityManager();
-        $order = $em->getRepository('Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order')->findOneBy(array('transactionReference' => $transReference));
-
-
-        // optional: check whether your webhook is of the desired type
-        if ($payload->type == "InvoiceInvalid") {
-            if ($order) {
-                $order->setCancelled($transReference);
-                $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle());
-                Log::addInfo($date . "Order was cancelled" . $payload->invoiceId . " Type: " . $payload->type . " Price: " . $invoicePrice . " E-Mail: " . $buyerEmail . "\n");
-                throw new \Exception('Invoice Invalid.');
-            }
+        $type = (string) ($payload->type ?? '');
+        if (!in_array($type, self::WEBHOOK_EVENTS, true)) {
+            return new Response('', 200);
         }
 
-        if ($payload->type == "InvoiceExpired") {
-            if ($order) {
-                $order->setCancelled($transReference);
-                $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle());
-                Log::addInfo("Order has expired" . $payload->invoiceId . " Type: " . $payload->type . " Price: " . $invoicePrice . " E-Mail: " . $buyerEmail . "\n");
-                throw new \Exception('Invoice Expired.');
-            }
+        $invoiceId = trim((string) ($payload->invoiceId ?? ''));
+        if ($invoiceId === '') {
+            Log::addWarning('BTCPay Server webhook did not contain an invoice ID.');
+            return new Response('', 400);
         }
 
-        if ($payload->type == "InvoiceSettled") {
-            if ($order) {
-                $order->completeOrder($transReference);
-                $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle());
-                Log::addInfo("Payload received for BtcPay invoice " . $payload->invoiceId . " Type: " . $payload->type . " Price: " . $invoicePrice . " E-Mail: " . $buyerEmail . "\n");
+        $entityManager = DatabaseORM::entityManager();
+        $order = $entityManager->getRepository(StoreOrder::class)->findOneBy([
+            'transactionReference' => $invoiceId,
+        ]);
+
+        if (!$order) {
+            Log::addWarning('BTCPay Server webhook references an invoice that is not associated with a Community Store order.');
+            return new Response('', 200);
+        }
+
+        if ($type === 'InvoiceExpired' || $type === 'InvoiceInvalid') {
+            if (!$order->getPaid()) {
+                self::cancelOrder($order, sprintf('BTCPay Server %s.', $type));
             }
+            return new Response('', 200);
+        }
+
+        // InvoiceSettled: fetch the invoice so amount, currency and late-payment state
+        // can be verified before completing the Community Store order.
+        try {
+            self::assertSdkAvailable();
+            $client = new Invoice(self::getHost(), self::getApiKey());
+            $invoice = $client->getInvoice(self::getStoreId(), $invoiceId);
+        } catch (\Throwable $exception) {
+            Log::addError('BTCPay Server settled invoice verification failed: ' . $exception->getMessage());
+            return new Response('', 500);
+        }
+
+        if ($order->getCancelled() || $invoice->isPaidLate()) {
+            if (!$order->getPaid()) {
+                self::cancelOrder($order, 'BTCPay Server late payment was rejected.');
+            }
+            Log::addWarning('BTCPay Server late settlement was ignored for cancelled order ' . $order->getOrderID() . '.');
+            return new Response('', 200);
+        }
+
+        if ($order->getPaid()) {
+            return new Response('', 200);
+        }
+
+        $currency = self::getStoreCurrency();
+        if (!$invoice->isSettled() || !self::invoiceMatchesOrder($invoice, $order, $currency)) {
+            Log::addError('BTCPay Server settled invoice did not match order ' . $order->getOrderID() . ' and was not completed.');
+            return new Response('', 200);
+        }
+
+        try {
+            $order->completeOrder($invoiceId);
+            Log::addInfo('BTCPay Server invoice ' . $invoiceId . ' completed Community Store order ' . $order->getOrderID() . '.');
+        } catch (\Throwable $exception) {
+            Log::addError('BTCPay Server could not complete Community Store order ' . $order->getOrderID() . ': ' . $exception->getMessage());
+            return new Response('', 500);
+        }
+
+        return new Response('', 200);
+    }
+
+    private static function invoiceMatchesOrder(InvoiceResult $invoice, StoreOrder $order, string $currency): bool
+    {
+        if ($currency === '' || strtoupper($invoice->getCurrency()) !== strtoupper($currency)) {
+            return false;
+        }
+
+        return bccomp(
+            $invoice->getAmount()->__toString(),
+            (string) $order->getTotal(),
+            8
+        ) === 0;
+    }
+
+    private static function cancelOrder(StoreOrder $order, string $comment): void
+    {
+        if ($order->getPaid() || $order->getCancelled()) {
+            return;
+        }
+
+        $order->setCancelled(new \DateTime());
+        $order->save();
+        $order->updateStatus(StoreOrderStatus::getStartingStatus()->getHandle(), $comment);
+    }
+
+    private static function getHost(): string
+    {
+        return rtrim(trim((string) Config::get('community_store_btcpay.btcpayUrl')), '/');
+    }
+
+    private static function getStoreId(): string
+    {
+        return trim((string) Config::get('community_store_btcpay.btcpayId'));
+    }
+
+    private static function getApiKey(): string
+    {
+        return trim((string) Config::get('community_store_btcpay.btcpayKey'));
+    }
+
+    private static function getWebhookSecret(): string
+    {
+        return trim((string) Config::get('community_store_btcpay.btcpayWebhooksecret'));
+    }
+
+    private static function getStoreCurrency(): string
+    {
+        return strtoupper(trim((string) Config::get('community_store.currency')));
+    }
+
+    private static function assertSdkAvailable(): void
+    {
+        self::loadSdkAutoloaderIfNeeded();
+        if (!class_exists(Invoice::class) || !class_exists(Webhook::class)) {
+            throw new \RuntimeException('BTCPay Server Greenfield PHP library is not installed. Run composer install in the package directory.');
         }
     }
 
+    private static function loadSdkAutoloaderIfNeeded(): void
+    {
+        if (class_exists(Invoice::class, false)) {
+            return;
+        }
+
+        $autoload = dirname(__DIR__, 5) . '/vendor/autoload.php';
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
+    }
 
     public function checkoutForm()
     {
-        $pmID = StorePaymentMethod::getByHandle('community_store_btcpay')->getID();
-        $this->set('pmID',$pmID);
+        $method = StorePaymentMethod::getByHandle('community_store_btcpay');
+        $this->set('pmID', $method ? $method->getID() : 0);
     }
 
-    public function getPaymentMinimum() {
+    public function getPaymentMinimum()
+    {
         return 0.01;
     }
 
-
     public function getName()
     {
-        return 'BTC Payserver';
+        return 'BTCPay Server';
     }
 
-    public function isExternal() {
+    public function isExternal()
+    {
         return true;
     }
 }
